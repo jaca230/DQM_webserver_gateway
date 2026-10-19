@@ -1,0 +1,42 @@
+{
+  "server": {
+    "address": "127.0.0.1",
+    "port": 8082,
+    "threads": 4,
+    "allowed-origins": [
+      "http://127.0.0.1:8081",
+      "http://localhost:8081"
+    ]
+  },
+  "sources": [
+    {
+      "type": "zmq-publisher",
+      "name": "benchmark-publisher",
+      "config": {
+        "endpoint": "tcp://127.0.0.1:5555",
+        "topics": ["TIME", "DATA", "DQM"],
+        "receive-high-water-mark": 4096,
+        "maximum-product-bytes": 67108864
+      }
+    }
+  ],
+  "store": {
+    "maximum-total-bytes": 268435456,
+    "maximum-products": 1024,
+    "maximum-view-bytes": 268435456,
+    "maximum-histograms": 4096,
+    "maximum-hit-series": 4096,
+    "maximum-waveforms": 4096,
+    "maximum-baselines": 1024,
+    "maximum-baseline-bytes": 67108864
+  },
+  "limits": {
+    "requests-per-second": 1000000.0,
+    "request-burst": 1000000,
+    "maximum-response-bytes": 8388608,
+    "maximum-histogram-bins": 4096,
+    "maximum-hits-per-series": 8192,
+    "maximum-waveform-samples": 8192,
+    "websocket-maximum-rate-hz": 10.0
+  }
+}
