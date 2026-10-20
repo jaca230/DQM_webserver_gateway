@@ -128,6 +128,7 @@ if(DQM_GATEWAY_BUILD_TESTS)
   )
   FetchContent_MakeAvailable(Catch2)
   add_executable(dqm_gateway_tests
+    tests/atar_store_test.cpp
     tests/client_rate_limiter_test.cpp
     tests/gateway_config_test.cpp
     tests/hit_series_store_test.cpp

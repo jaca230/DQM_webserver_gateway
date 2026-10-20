@@ -62,7 +62,8 @@ PluginLoader ── discovers versioned shared modules
                 ├── raw product ── store/routes
                 ├── waveform ───── decoder/store/routes
                 ├── hit series ─── decoder/store/routes
-                └── histogram ──── decoder/store/routes
+                ├── histogram ──── decoder/store/routes
+                └── ATAR DQM ───── decoder/store/selective view route
                                          │
                                          ▼
 ApiRouteRegistry ───────── Drogon HTTP/WebSocket API
@@ -147,6 +148,7 @@ necessary. It never retains an unbounded event history.
 | `GET` | `/api/v1/waveforms?detector=...` | Selected detector traces with optional module/channel filters |
 | `GET` | `/api/v1/hit-series?detector=...` | Selected hit times and energies with optional module/channel filters |
 | `GET` | `/api/v1/histograms?name=...` | Histogram view and optional baseline |
+| `GET` | `/api/v1/atar?view=...` | One selected ATAR monitoring view |
 | `POST` | `/api/v1/histograms/baselines` | Create a non-destructive baseline |
 | `GET` | `/metrics` | Prometheus text exposition |
 | `WS` | `/api/v1/stream` | Rate-capped latest-product notifications |
@@ -232,6 +234,20 @@ clients can distinguish producer time from HTTP fetch time.
 
 The gateway never opens ROOT objects. ROOT archival and expert inspection
 remain in the separate nearline pipeline.
+
+## ATAR views
+
+The `dqm-atar-v1` plugin retains the latest compact Gaudi monitoring snapshot.
+Clients request only one of `occupancy`, `hits-per-event`, `baseline`, `noise`,
+`event`, `persistence`, `charge-vs-amplitude`, or `amplitude-by-channel`:
+
+```sh
+curl 'http://127.0.0.1:8080/api/v1/atar?view=occupancy'
+```
+
+The response includes the shared geometry and generation timestamp, but no
+other view payload. This keeps browser traffic bounded even when the producer
+analyzes every channel.
 
 ## Resource controls
 
