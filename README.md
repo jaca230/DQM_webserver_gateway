@@ -237,9 +237,11 @@ remain in the separate nearline pipeline.
 
 ## ATAR views
 
-The `dqm-atar-v1` plugin retains the latest compact Gaudi monitoring snapshot.
+The `dqm-atar-view-v1` plugin independently retains the latest compact product
+from each enabled Gaudi ATAR stage.
 Clients request only one of `occupancy`, `hits-per-event`, `baseline`, `noise`,
-`event`, `persistence`, `charge-vs-amplitude`, or `amplitude-by-channel`:
+`waveforms`, `hit-positions`, `charge-depth`, `persistence`,
+`charge-vs-amplitude`, or `amplitude-by-channel`:
 
 ```sh
 curl 'http://127.0.0.1:8080/api/v1/atar?view=occupancy'

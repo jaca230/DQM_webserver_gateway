@@ -12,32 +12,38 @@ AtarStore::AtarStore(std::size_t maximum_bytes) : maximum_bytes_(maximum_bytes) 
     if (maximum_bytes == 0) throw std::invalid_argument("ATAR store limit must be positive");
 }
 void AtarStore::update(nlohmann::json product) {
+    const auto view = product.value("view", "");
+    if (view.empty()) throw std::invalid_argument("ATAR view product has no view");
     const auto bytes = product.dump().size();
     if (bytes > maximum_bytes_) throw std::length_error("ATAR product exceeds store limit");
     std::unique_lock lock(mutex_);
-    product_ = std::move(product);
-    bytes_ = bytes;
+    const auto existing = views_.find(view);
+    const auto replaced_bytes = existing == views_.end() ? 0 : existing->second.dump().size();
+    if (bytes_ - replaced_bytes + bytes > maximum_bytes_)
+        throw std::length_error("ATAR views exceed store limit");
+    bytes_ = bytes_ - replaced_bytes + bytes;
+    views_[view] = std::move(product);
 }
 nlohmann::json AtarStore::view(const std::string& name) const {
     static const std::vector<std::string> allowed{
-        "occupancy", "hits-per-event", "baseline", "noise", "event",
+        "occupancy", "hits-per-event", "baseline", "noise", "waveforms",
+        "hit-positions", "charge-depth",
         "persistence", "charge-vs-amplitude", "amplitude-by-channel"};
     if (std::find(allowed.begin(), allowed.end(), name) == allowed.end())
         throw std::invalid_argument("unknown ATAR view");
     std::shared_lock lock(mutex_);
-    if (product_.empty() || !product_.contains(name)) return nlohmann::json::object();
-    return {{"schema", "dqm-atar-view-v1"}, {"view", name},
-        {"epoch", product_.value("epoch", "")},
-        {"sequence", product_.value("sequence", std::uint64_t{0})},
-        {"generated-at-unix-ns", product_.value("generated-at-unix-ns", std::int64_t{0})},
-        {"geometry", product_.value("geometry", nlohmann::json::object())},
-        {"data", product_.at(name)}};
+    const auto found = views_.find(name);
+    return found == views_.end() ? nlohmann::json::object() : found->second;
 }
 nlohmann::json AtarStore::catalog_json() const {
     std::shared_lock lock(mutex_);
-    return {{"available", !product_.empty()}, {"schema", "dqm-atar-v1"},
-        {"sequence", product_.value("sequence", std::uint64_t{0})}};
+    auto products = nlohmann::json::array();
+    for (const auto& [name, product] : views_)
+        products.push_back({{"view", name},
+            {"sequence", product.value("sequence", std::uint64_t{0})}});
+    return {{"available", !views_.empty()}, {"schema", "dqm-atar-view-v1"},
+        {"views", std::move(products)}};
 }
-std::size_t AtarStore::stored_items() const { std::shared_lock lock(mutex_); return product_.empty() ? 0 : 1; }
+std::size_t AtarStore::stored_items() const { std::shared_lock lock(mutex_); return views_.size(); }
 std::size_t AtarStore::stored_bytes() const { std::shared_lock lock(mutex_); return bytes_; }
 }  // namespace dqm_gateway

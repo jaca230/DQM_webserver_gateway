@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <shared_mutex>
 #include <string>
+#include <unordered_map>
 
 #include <nlohmann/json.hpp>
 
@@ -24,7 +25,7 @@ private:
     std::size_t maximum_bytes_;
     std::size_t bytes_{0};
     mutable std::shared_mutex mutex_;
-    nlohmann::json product_;
+    std::unordered_map<std::string, nlohmann::json> views_;
 };
 
 }  // namespace dqm_gateway
