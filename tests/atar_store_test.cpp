@@ -21,5 +21,5 @@ TEST_CASE("ATAR store returns only the requested view") {
     REQUIRE_FALSE(view.contains("hits-per-event"));
     CHECK(store.view("hits-per-event").at("sequence") == 9);
     CHECK(store.stored_items() == 2);
-    REQUIRE_THROWS_AS(store.view("not-a-view"), std::invalid_argument);
+    CHECK(store.view("not-a-view").empty());
 }

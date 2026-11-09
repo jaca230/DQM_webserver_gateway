@@ -1,11 +1,9 @@
 #include "dqm_gateway/product/atar/atar_store.h"
 
-#include <algorithm>
 #include <cstdint>
 #include <mutex>
 #include <stdexcept>
 #include <utility>
-#include <vector>
 
 namespace dqm_gateway {
 AtarStore::AtarStore(std::size_t maximum_bytes) : maximum_bytes_(maximum_bytes) {
@@ -25,12 +23,6 @@ void AtarStore::update(nlohmann::json product) {
     views_[view] = std::move(product);
 }
 nlohmann::json AtarStore::view(const std::string& name) const {
-    static const std::vector<std::string> allowed{
-        "occupancy", "hits-per-event", "baseline", "noise", "waveforms",
-        "hit-positions", "charge-depth",
-        "persistence", "charge-vs-amplitude", "amplitude-by-channel"};
-    if (std::find(allowed.begin(), allowed.end(), name) == allowed.end())
-        throw std::invalid_argument("unknown ATAR view");
     std::shared_lock lock(mutex_);
     const auto found = views_.find(name);
     return found == views_.end() ? nlohmann::json::object() : found->second;

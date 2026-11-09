@@ -78,7 +78,8 @@ nlohmann::json WaveformStore::view(
     std::optional<int> module,
     std::optional<int> submodule,
     std::optional<int> channel,
-    std::size_t maximum_samples) const {
+    std::size_t maximum_samples,
+    bool latest_only) const {
     if (maximum_samples == 0 || maximum_samples > maximum_samples_per_waveform_) {
         throw std::invalid_argument("Invalid maximum waveform sample count");
     }
@@ -86,12 +87,13 @@ nlohmann::json WaveformStore::view(
     nlohmann::json result{{"schema", "dqm-waveform-v1"}, {"detector", detector},
                           {"generated-at-unix-ns", 0},
                           {"waveforms", nlohmann::json::array()}};
-    for (const auto& [waveform_key, waveform] : waveforms_) {
-        (void)waveform_key;
-        if (waveform.detector != detector ||
-            (module && waveform.module != *module) ||
-            (submodule && waveform.submodule != *submodule) ||
-            (channel && waveform.channel != *channel)) continue;
+    const auto matches = [&](const WaveformSnapshot& waveform) {
+        return waveform.detector == detector &&
+            (!module || waveform.module == *module) &&
+            (!submodule || waveform.submodule == *submodule) &&
+            (!channel || waveform.channel == *channel);
+    };
+    const auto append = [&](const WaveformSnapshot& waveform) {
         const auto stride = std::max<std::size_t>(
             1, (waveform.samples.size() + maximum_samples - 1) / maximum_samples);
         nlohmann::json samples = nlohmann::json::array();
@@ -115,6 +117,27 @@ nlohmann::json WaveformStore::view(
         result["generated-at-unix-ns"] = std::max(
             result["generated-at-unix-ns"].get<std::int64_t>(),
             waveform.generated_at_unix_ns);
+    };
+
+    if (latest_only) {
+        const WaveformSnapshot* latest = nullptr;
+        for (const auto& [waveform_key, waveform] : waveforms_) {
+            (void)waveform_key;
+            if (!matches(waveform)) continue;
+            if (latest == nullptr || waveform.sequence > latest->sequence ||
+                (waveform.sequence == latest->sequence &&
+                 waveform.generated_at_unix_ns > latest->generated_at_unix_ns)) {
+                latest = &waveform;
+            }
+        }
+        if (latest != nullptr) append(*latest);
+        return result;
+    }
+
+    for (const auto& [waveform_key, waveform] : waveforms_) {
+        (void)waveform_key;
+        if (!matches(waveform)) continue;
+        append(waveform);
     }
     return result;
 }

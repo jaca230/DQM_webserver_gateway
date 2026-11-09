@@ -40,7 +40,8 @@ public:
         std::optional<int> module,
         std::optional<int> submodule,
         std::optional<int> channel,
-        std::size_t maximum_samples) const;
+        std::size_t maximum_samples,
+        bool latest_only = false) const;
     nlohmann::json catalog() const;
     [[nodiscard]] std::string_view name() const noexcept override { return "waveforms"; }
     [[nodiscard]] nlohmann::json catalog_json() const override;

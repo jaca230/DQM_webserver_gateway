@@ -15,7 +15,7 @@ The first configure downloads pinned Drogon, JsonCpp, nlohmann/json, and Catch2
 sources. ZeroMQ and cppzmq are system dependencies.
 
 ```sh
-./setup_env.sh
+./scripts/setup_env.sh
 ./scripts/build.sh --overwrite
 ctest --test-dir build --output-on-failure
 ```
@@ -27,12 +27,12 @@ Run the gateway with:
 
 ```sh
 ./scripts/run.sh
-# or
-./scripts/run.sh --config /path/to/config.json --port 8080 --threads 4
+# Optional overrides:
+./scripts/run.sh --config /path/to/config.json --port 8000 --threads 4
 ```
 
 The default configuration creates a ZeroMQ publisher source at
-`tcp://127.0.0.1:5555` and serves `http://127.0.0.1:8080`.
+`tcp://127.0.0.1:5555` and serves `http://127.0.0.1:8000`.
 
 To exercise it with the publisher, start the gateway first and then run:
 
@@ -44,9 +44,9 @@ cd /home/jack/cpp_projects/midas_stuff/midas_publisher
 Then inspect:
 
 ```sh
-curl http://127.0.0.1:8080/api/v1/health
-curl http://127.0.0.1:8080/api/v1/catalog
-curl http://127.0.0.1:8080/metrics
+curl http://127.0.0.1:8000/api/v1/health
+curl http://127.0.0.1:8000/api/v1/catalog
+curl http://127.0.0.1:8000/metrics
 ```
 
 ## Architecture
@@ -75,6 +75,22 @@ the shared registry. `HttpApi` only activates that registry; it has no knowledge
 of concrete products or stores. Routes that expose stored data derive from
 `DataRoute`, while process-level health, catalog, and metrics routes live under
 `api/route/system`.
+
+The raw-product module is the schema-agnostic fallback. Every accepted source
+product is retained there and is immediately available through the catalog,
+metadata, JSON, and payload endpoints. Consequently, adding a Gaudi product
+does not inherently require gateway code. Add a specialized `DataProduct`
+plugin only when clients need product-aware validation, indexing, aggregation,
+or selective queries. For example, the waveform plugin is what makes it
+possible to fetch one channel without transferring every waveform in the
+publication.
+
+Prefer reusing the small set of established online transport schemas—waveform,
+histogram, and hit series—when a new Gaudi algorithm produces the same kind of
+data. This lets new detector products use existing stores and routes without a
+gateway change. A genuinely new access pattern still needs a corresponding
+plugin because the gateway cannot infer useful query semantics from arbitrary
+JSON.
 
 Input is independently extensible through `DataSource`, its factory registry,
 and the configured `sources` array. Adding a source does not alter a product
@@ -145,7 +161,7 @@ necessary. It never retains an unbounded event history.
 | `GET` | `/api/v1/products/metadata?id=...` | Metadata without the payload |
 | `GET` | `/api/v1/products/json?id=...` | A bounded JSON product |
 | `GET` | `/api/v1/products/payload?id=...` | Raw bounded payload with `ETag` |
-| `GET` | `/api/v1/waveforms?detector=...` | Selected detector traces with optional module/channel filters |
+| `GET` | `/api/v1/waveforms?detector=...` | Selected detector traces with optional module/channel filters; `latest=true` returns one newest matching active channel |
 | `GET` | `/api/v1/hit-series?detector=...` | Selected hit times and energies with optional module/channel filters |
 | `GET` | `/api/v1/histograms?name=...` | Histogram view and optional baseline |
 | `GET` | `/api/v1/atar?view=...` | One selected ATAR monitoring view |
@@ -193,13 +209,13 @@ Create a display baseline without mutating Gaudi:
 ```sh
 curl -X POST -H 'Content-Type: application/json' \
   --data '{"histogram":"wfd5/integral/ch4","name":"operator-zero"}' \
-  http://127.0.0.1:8080/api/v1/histograms/baselines
+  http://127.0.0.1:8000/api/v1/histograms/baselines
 ```
 
 Request the accumulated difference and at most 256 output bins:
 
 ```sh
-curl 'http://127.0.0.1:8080/api/v1/histograms?name=wfd5%2Fintegral%2Fch4&baseline=operator-zero&max-bins=256'
+curl 'http://127.0.0.1:8000/api/v1/histograms?name=wfd5%2Fintegral%2Fch4&baseline=operator-zero&max-bins=256'
 ```
 
 Baselines cannot cross histogram definitions or epochs. `sumw2` accumulators
@@ -213,7 +229,7 @@ The built-in `dqm-waveform-v1` decoder accepts compact products from the Gaudi
 online output. Select only what a plot needs and cap its samples:
 
 ```sh
-curl 'http://127.0.0.1:8080/api/v1/waveforms?detector=wfd5&module=0&submodule=0&channel=0&max-samples=1024'
+curl 'http://127.0.0.1:8000/api/v1/waveforms?detector=wfd5&module=0&submodule=0&channel=0&max-samples=1024'
 ```
 
 Sampled detectors include `sample-period-ns`.
@@ -224,7 +240,7 @@ MuSiP uses the distinct `dqm-hit-series-v1` product with equal-length
 `times-ns` and `energies` arrays. Request a bounded time/energy series with:
 
 ```sh
-curl 'http://127.0.0.1:8080/api/v1/hit-series?detector=musip&module=0&channel=0&max-hits=256'
+curl 'http://127.0.0.1:8000/api/v1/hit-series?detector=musip&module=0&channel=0&max-hits=256'
 ```
 
 For each detector channel, the gateway keeps a rolling history capped by
@@ -238,13 +254,14 @@ remain in the separate nearline pipeline.
 ## ATAR views
 
 The `dqm-atar-view-v1` plugin independently retains the latest compact product
-from each enabled Gaudi ATAR stage.
-Clients request only one of `occupancy`, `hits-per-event`, `baseline`, `noise`,
-`waveforms`, `hit-positions`, `charge-depth`, `persistence`,
-`charge-vs-amplitude`, or `amplitude-by-channel`:
+from each enabled Gaudi ATAR stage. View names are producer-defined and exposed
+through the catalog, so adding another ATAR view does not require a gateway
+change. Current examples include `occupancy`, `hits-per-event`, `baseline`,
+`noise`, `waveforms`, `hit-positions`, `charge-depth`, `persistence`,
+`charge-vs-amplitude`, and `amplitude-by-channel`:
 
 ```sh
-curl 'http://127.0.0.1:8080/api/v1/atar?view=occupancy'
+curl 'http://127.0.0.1:8000/api/v1/atar?view=occupancy'
 ```
 
 The response includes the shared geometry and generation timestamp, but no
@@ -268,6 +285,6 @@ not trust forwarded client-address headers unless trusted-proxy handling is
 added explicitly.
 
 The committed `config/config.json` is the normal runtime policy and already
-allows the local React development server and MIDAS page on port 8081. Raw
+allows the local React development server and MIDAS page on port 8080. Raw
 capacity tests use the separately committed `config/benchmark.json`; generated
 benchmark artifacts contain results, never gateway configuration.

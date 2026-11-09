@@ -16,7 +16,7 @@ public:
     void parse(const nlohmann::json& value) override;
 
     std::string address{"127.0.0.1"};
-    std::uint16_t port{8080};
+    std::uint16_t port{8000};
     std::size_t threads{2};
     std::vector<std::string> allowed_origins;
 };

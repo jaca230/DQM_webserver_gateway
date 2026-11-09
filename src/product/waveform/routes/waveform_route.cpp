@@ -26,7 +26,9 @@ void WaveformRoute::register_route(ApiContext& context) {
                     optional_integer(request, "module"),
                     optional_integer(request, "submodule"),
                     optional_integer(request, "channel"),
-                    bounded_size(request, "max-samples", maximum_samples_)));
+                    bounded_size(request, "max-samples", maximum_samples_),
+                    request->getParameter("latest") == "true" ||
+                        request->getParameter("latest") == "1"));
             } catch (const std::exception& exception) {
                 context.send_error(callback, 400, exception.what());
             }

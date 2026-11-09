@@ -38,3 +38,30 @@ TEST_CASE("Waveform batches are rejected atomically") {
     CHECK_THROWS_AS(store.update({valid, invalid}), std::invalid_argument);
     CHECK(store.catalog().empty());
 }
+
+TEST_CASE("Waveform store can return only the newest active detector channel") {
+    dqm_gateway::WaveformStore store(1024 * 1024, 16, 1024);
+    dqm_gateway::WaveformSnapshot older;
+    older.detector = "sampic";
+    older.epoch = "run-1";
+    older.module = 0;
+    older.channel = 0;
+    older.sample_period_ns = 1.0;
+    older.sequence = 41;
+    older.samples = {1, 2};
+    auto latest = older;
+    latest.module = 3;
+    latest.submodule = 2;
+    latest.channel = 9;
+    latest.sequence = 42;
+    latest.samples = {4, 5};
+    store.update({older, latest});
+
+    const auto result = store.view("sampic", {}, {}, {}, 1024, true);
+    REQUIRE(result.at("waveforms").size() == 1);
+    CHECK(result.at("waveforms").front().at("module") == 3);
+    CHECK(result.at("waveforms").front().at("submodule") == 2);
+    CHECK(result.at("waveforms").front().at("channel") == 9);
+    CHECK(result.at("waveforms").front().at("samples") ==
+          nlohmann::json::array({4, 5}));
+}
